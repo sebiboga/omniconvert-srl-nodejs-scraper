@@ -1,8 +1,8 @@
 # job_seeker_ro_spider
 
-**job_seeker_ro_spider** — scraper pentru job-urile Omniconvert Systems din România.
+**job_seeker_ro_spider** — scraper pentru job-urile Omniconvert SRL din România.
 
-Extrage anunțurile de pe [Omniconvert Careers Romania](https://www.omniconvert.com/en/jobs/romania) și le publică în [peviitor.ro](https://peviitor.ro) prin API-ul SOLR.
+Extrage anunțurile de pe pagina [Omniconvert About](https://www.omniconvert.com/about/) (Astro site static) și le publică în [peviitor.ro](https://peviitor.ro) prin API-ul SOLR.
 
 ## Identificare
 
@@ -19,7 +19,7 @@ job_seeker_ro_spider
    - Status: activ/inactiv/radiat
    - Adresa completă din registrul comerțului
 2. **Cross-validează cu Peviitor** — verifică existența companiei în API-ul Peviitor
-3. **Scrape-uiește job-urile** — extrage lista completă de job-uri din API-ul public Omniconvert Careers, filtrat pe România
+3. **Scrape-uiește job-urile** — extrage lista completă de job-uri din pagina `/about/` (Astro HTML, parse-uiți cu cheerio)
 4. **Transformă datele** — normalizează locațiile (doar orașe românești), tag-urile (lowercase), workmode-ul (remote/on-site/hybrid)
 5. **Stochează în SOLR** — upsert în `job` core (job-urile) și `company` core (datele companiei cu adresa completă)
 
@@ -34,9 +34,9 @@ job_seeker_ro_spider
 ├── company.json       # Cache companie (fallback când ANAF e down)
 ├── ROBOTS.md          # Analiză robots.txt și politici de scraping
 ├── tests/
-│   ├── unit/          # 56 teste unitare (API-uri mock-uite)
-│   ├── integration/   # 16 teste de integrare (ANAF + SOLR live)
-│   └── e2e/           # 13 teste end-to-end (pipelin complet)
+│   ├── unit/          # 55 teste unitare (API-uri mock-uite)
+│   ├── integration/   # 12 teste de integrare (ANAF + SOLR live)
+│   └── e2e/           # 11 teste end-to-end (pipelin complet)
 └── .github/workflows/
     ├── scrape.yml     # Rulează zilnic la 6 AM UTC
     └── test.yml       # Teste automate la fiecare push/PR
@@ -46,7 +46,7 @@ job_seeker_ro_spider
 
 | API | URL | Autentificare |
 |---|---|---|
-| Omniconvert Careers | `https://www.omniconvert.com/api/jobs/v2/search/...` | Public |
+| Omniconvert About | `https://www.omniconvert.com/about/` | Public (Astro HTML) |
 | ANAF (demoanaf) | `https://demoanaf.ro/api/...` | Public |
 | Peviitor | `https://api.peviitor.ro/v1/company/` | Public |
 | SOLR (job core) | `https://solr.peviitor.ro/solr/job` | `SOLR_AUTH` |

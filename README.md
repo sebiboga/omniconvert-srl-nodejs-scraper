@@ -6,7 +6,7 @@
 [![JavaScript](https://img.shields.io/badge/javascript-ESM-F7DF1E?logo=javascript&logoColor=black)](https://ecma-international.org/)
 [![Node.js](https://img.shields.io/badge/node-24-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 
-**job_seeker_ro_spider** — un scraper pentru job-urile Omniconvert Systems din România. Extrage anunțurile de pe [Omniconvert Careers Romania](https://www.omniconvert.com/en/jobs/romania) și le publică în [peviitor.ro](https://peviitor.ro) prin API-ul SOLR.
+**job_seeker_ro_spider** — un scraper pentru job-urile Omniconvert SRL din România. Extrage anunțurile de pe [Omniconvert About](https://www.omniconvert.com/about/) (Astro site static) și le publică în [peviitor.ro](https://peviitor.ro) prin API-ul SOLR.
 
 ## Overview
 
@@ -14,11 +14,12 @@ Proiectul automatizează colectarea zilnică a job-urilor Omniconvert din Român
 
 ## Features
 
-- Extrage job-uri din API-ul public Omniconvert Careers Romania
+- Extrage job-uri din pagina `/about/` (cheerio HTML parsing)
 - Validează compania via ANAF (CUI, status activ/inactiv, adresă completă)
 - Cross-validează cu Peviitor API
 - Stochează în SOLR (job core + company core)
 - GitHub Actions: scrape zilnic + testare automată (unit, integration, e2e)
+- 68 teste (55 unit + 12 integration + 11 e2e, 1 skip fără SOLR)
 - Teste SOLR condiționale — auto-skip când `SOLR_AUTH` nu e setat
 - Se identifică prin User-Agent: `job_seeker_ro_spider`
 
@@ -33,9 +34,9 @@ Proiectul automatizează colectarea zilnică a job-urilor Omniconvert din Român
 ├── company.json       # Cached company data (fallback when ANAF is down)
 ├── ROBOTS.md          # robots.txt analysis and scraping policy
 ├── tests/             # Test suite
-│   ├── unit/          # 56 tests (mocked APIs)
-│   ├── integration/   # 16 tests (ANAF + SOLR live, Peviitor skipped)
-│   └── e2e/           # 13 tests (full pipeline, real Omniconvert API)
+│   ├── unit/          # 55 tests (mocked APIs)
+│   ├── integration/   # 12 tests (ANAF + SOLR live)
+│   └── e2e/           # 11 tests (full pipeline, real Omniconvert about page)
 ├── .github/workflows/
 │   ├── scrape.yml     # Daily scraping at 6 AM UTC
 │   └── test.yml       # Automation Tests on push/PR
@@ -121,16 +122,6 @@ Licensed under the [MIT License](LICENSE).
 ## Managed By
 
 This project is managed by [ASOCIATIA OPORTUNITATI SI CARIERE](https://oportunitatisicariere.ro) and used as a web scraper for the [peviitor.ro](https://peviitor.ro) job board project.
-
-## Robots.txt Policy
-
-Acest scraper respectă regulile din [robots.txt](https://www.omniconvert.com/robots.txt) al Omniconvert Careers. Pentru analiza completă, vezi [ROBOTS.md](ROBOTS.md).
-
-**Puncte cheie:**
-- API-ul `/api/*` este `Disallow` în robots.txt — scraper-ul îl folosește, dar cu rate limiting și un singur User-Agent identificabil (`job_seeker_ro_spider`)
-- Paginile individuale de job (`/*/vacancy/*`) sunt `Disallow` — scraper-ul NU le parsează, doar le verifică accesibilitatea via HEAD request
-- Endpoint-urile permise (`/`, `/en/jobs`) nu sunt scraper-uite
-- Comportament: 1 cerere/10 job-uri, delay 1s între pagini, fără concurență
 
 ## Disclaimer
 
