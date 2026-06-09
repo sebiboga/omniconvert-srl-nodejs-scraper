@@ -5,11 +5,41 @@ jest.unstable_mockModule('node-fetch', () => ({
 }));
 
 const MOCK_ABOUT_HTML = `<!DOCTYPE html><html><body>
-<div class="team-section">
-  <a href="/jobs/sales-account-executive/">Sales Account Executive</a>
-  <a href="/jobs/sales-development-representative/">Sales Development Representative</a>
-  <a href="/jobs/business-development-manager/">Business Development Manager</a>
-</div>
+<ul class="grid max-w-[780px] grid-cols-1 gap-6 md:grid-cols-2">
+  <li>
+    <h4>Sales Account Executive</h4>
+    <a href="/jobs/sales-account-executive/">View details</a>
+  </li>
+  <li>
+    <h4>Sales Development Representative</h4>
+    <a href="/jobs/sales-development-representative/">View details</a>
+  </li>
+  <li>
+    <h4>Business Development Manager</h4>
+    <a href="/jobs/business-development-manager/">View details</a>
+  </li>
+</ul>
+</body></html>`;
+
+const MOCK_JOB_LD = {
+  '@context': 'https://schema.org',
+  '@graph': [{
+    '@type': 'JobPosting',
+    url: 'https://www.omniconvert.com/jobs/sales-account-executive/',
+    title: 'Sales Account Executive',
+    datePosted: '2019-04-30T06:22:54+00:00',
+    employmentType: 'FULL_TIME',
+    jobLocation: {
+      '@type': 'Place',
+      address: { '@type': 'PostalAddress', addressLocality: 'Bucharest' }
+    }
+  }]
+};
+
+const MOCK_JOB_PAGE_HTML = `<!DOCTYPE html><html><body>
+<script type="application/ld+json">${JSON.stringify(MOCK_JOB_LD)}</script>
+<h1>Sales Account Executive</h1>
+<p>Bucharest · Full-time / Hybrid</p>
 </body></html>`;
 
 describe('index.js', () => {
@@ -26,7 +56,7 @@ describe('index.js', () => {
   });
 
   describe('scrapeJobs', () => {
-    it('should extract job links from about page', async () => {
+    it('should extract job links from about page using li > a[href^="/jobs/"]', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         text: async () => MOCK_ABOUT_HTML
@@ -39,6 +69,21 @@ describe('index.js', () => {
       expect(jobs[0].title).toBe('Sales Account Executive');
       expect(jobs[0].url).toMatch(/omniconvert\.com\/jobs\//);
     });
+
+    it('should fetch and parse JSON-LD from job detail pages', async () => {
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, text: async () => MOCK_ABOUT_HTML })
+        .mockResolvedValueOnce({ ok: true, text: async () => MOCK_JOB_PAGE_HTML })
+        .mockResolvedValueOnce({ ok: true, text: async () => MOCK_JOB_PAGE_HTML })
+        .mockResolvedValueOnce({ ok: true, text: async () => MOCK_JOB_PAGE_HTML });
+
+      const jobs = await index.scrapeJobs();
+
+      expect(jobs.length).toBe(3);
+      expect(jobs[0].location).toBe('București');
+      expect(jobs[0].workplaceType).toBe('hybrid');
+      expect(jobs[0].postingDate).toBe('2019-04-30');
+    });
   });
 
   describe('transformJobs', () => {
@@ -48,7 +93,7 @@ describe('index.js', () => {
         url: 'https://www.omniconvert.com/jobs/sales-account-executive/',
         location: 'București',
         workplaceType: 'hybrid',
-        postingDate: '2026-01-15',
+        postingDate: '2019-04-30',
       }];
 
       const result = index.transformJobs(rawJobs);

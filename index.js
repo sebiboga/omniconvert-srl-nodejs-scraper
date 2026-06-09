@@ -17,26 +17,18 @@ function extractJobsFromAboutPage(html) {
   const $ = cheerio.load(html);
   const jobs = [];
 
-  $('a[href^="/jobs/"]').each((i, el) => {
+  $('li a[href^="/jobs/"]').each((i, el) => {
     const href = $(el).attr('href');
-    const parentText = $(el).parent().text().trim();
-    const linkText = $(el).text().trim();
-
-    let title = '';
-    if (linkText && !linkText.match(/^(Details|details|Apply|apply|→|←)$/i)) {
-      title = linkText;
-    } else {
-      const prev = $(el).closest('div').prev().text().trim();
-      if (prev && prev.length > 2) title = prev;
-    }
+    const li = $(el).closest('li');
+    const title = li.find('h4').first().text().trim();
 
     if (title && href && href.startsWith('/jobs/')) {
       const fullUrl = `https://www.omniconvert.com${href}`;
       if (!jobs.find(j => j.url === fullUrl)) {
         jobs.push({
-          title: title.trim(),
+          title,
           url: fullUrl,
-          location: 'București',
+          location: '',
           workplaceType: '',
           postingDate: '',
         });
@@ -47,6 +39,75 @@ function extractJobsFromAboutPage(html) {
   return jobs;
 }
 
+function extractStructuredData(html) {
+  const $ = cheerio.load(html);
+  const data = { title: '', location: '', workplaceType: '', postingDate: '' };
+
+  const ldJson = $('script[type="application/ld+json"]')
+    .map((i, el) => {
+      try { return JSON.parse($(el).text()); } catch { return null; }
+    })
+    .get()
+    .find(item => {
+      const graph = item['@graph'] || [];
+      return graph.some(g => g['@type'] === 'JobPosting');
+    });
+
+  if (ldJson) {
+    const graph = ldJson['@graph'] || [];
+    const posting = graph.find(g => g['@type'] === 'JobPosting') || {};
+    data.title = posting.title || '';
+    data.postingDate = posting.datePosted ? posting.datePosted.slice(0, 10) : '';
+
+    const addr = posting.jobLocation?.address || {};
+    const city = addr.addressLocality || '';
+    data.location = city === 'Bucharest' ? 'București' : city;
+
+    if (posting.employmentType) {
+      const et = posting.employmentType.toUpperCase();
+      if (et === 'FULL_TIME') data.workplaceType = 'hybrid';
+      else if (et === 'PART_TIME') data.workplaceType = 'hybrid';
+      else if (et === 'REMOTE') data.workplaceType = 'remote';
+      else if (et === 'ON_SITE') data.workplaceType = 'on-site';
+    }
+  }
+
+  return data;
+}
+
+const LOCATION_WORK_REGEX = /(?:Bucharest|București|Iași|Cluj|Timișoara|Brașov|Constanța|Sibiu|Oradea)\s*[·•]\s*(Full-time|Part-time|Hybrid|Remote|On-site)/i;
+const LOCATION_REGEX = /(Bucharest|București|Iași|Cluj|Timișoara|Brașov|Constanța|Sibiu|Oradea)/i;
+const WORK_REGEX = /(Remote|On-Site|Onsite|Hybrid|Full-time|Part-time)/i;
+
+function extractLocationFromText(text) {
+  const data = { location: '', workplaceType: '' };
+
+  const combined = text.match(LOCATION_WORK_REGEX);
+  if (combined) {
+    data.location = combined[1] === 'Bucharest' ? 'București' : combined[1];
+    const w = combined[2].toLowerCase();
+    if (w === 'on-site' || w === 'onsite') data.workplaceType = 'on-site';
+    else if (w === 'remote') data.workplaceType = 'remote';
+    else if (w === 'hybrid' || w === 'full-time' || w === 'part-time') data.workplaceType = 'hybrid';
+    return data;
+  }
+
+  const locMatch = text.match(LOCATION_REGEX);
+  if (locMatch) {
+    data.location = locMatch[1] === 'Bucharest' ? 'București' : locMatch[1];
+  }
+
+  const workMatch = text.match(WORK_REGEX);
+  if (workMatch) {
+    const w = workMatch[1].toLowerCase();
+    if (w === 'on-site' || w === 'onsite') data.workplaceType = 'on-site';
+    else if (w === 'remote') data.workplaceType = 'remote';
+    else if (w === 'hybrid' || w === 'full-time' || w === 'part-time') data.workplaceType = 'hybrid';
+  }
+
+  return data;
+}
+
 async function scrapeJobDetails(job) {
   try {
     const res = await fetch(job.url, {
@@ -54,34 +115,19 @@ async function scrapeJobDetails(job) {
     });
     if (!res.ok) return job;
     const html = await res.text();
-    const $ = cheerio.load(html);
+    const structured = extractStructuredData(html);
 
-    const text = $('body').text();
+    if (structured.title) job.title = structured.title;
+    if (structured.location) job.location = structured.location;
+    if (structured.workplaceType) job.workplaceType = structured.workplaceType;
+    if (structured.postingDate) job.postingDate = structured.postingDate;
 
-    const titleMatch = text.match(/([^\n]+)\s*[-–|]\s*(?:Bucharest|București|Iași|Cluj|Timișoara|Brașov|Constanța|Sibiu|Oradea)/i);
-    if (titleMatch) {
-      job.title = titleMatch[1].trim();
-    }
-
-    const locationMatch = text.match(/(?:Bucharest|București|Iași|Cluj|Timișoara|Brașov|Constanța|Sibiu|Oradea)/i);
-    if (locationMatch) {
-      job.location = locationMatch[0] === 'Bucharest' ? 'București' : locationMatch[0];
-    }
-
-    const workMatch = text.match(/(Remote|On-site|Hybrid|Full-time|Part-time)/i);
-    if (workMatch) {
-      const w = workMatch[1].toLowerCase();
-      if (w === 'remote') job.workplaceType = 'remote';
-      else if (w === 'hybrid' || w === 'full-time') job.workplaceType = 'hybrid';
-      else if (w === 'on-site' || w === 'part-time') job.workplaceType = 'on-site';
-    }
-
-    const dateText = $('meta[property="article:published_time"]').attr('content')
-      || $('time').attr('datetime')
-      || $('[itemprop="datePosted"]').attr('content')
-      || '';
-    if (dateText) {
-      job.postingDate = dateText.slice(0, 10);
+    if (!job.location || !job.workplaceType) {
+      const $ = cheerio.load(html);
+      const visibleText = $('h1').first().parent().text() || $('body').text();
+      const fallback = extractLocationFromText(visibleText);
+      if (!job.location && fallback.location) job.location = fallback.location;
+      if (!job.workplaceType && fallback.workplaceType) job.workplaceType = fallback.workplaceType;
     }
   } catch {
   }
@@ -115,6 +161,7 @@ function transformJobs(jobs) {
     location: [job.location || 'București'],
     workmode: job.workplaceType || 'hybrid',
     country: 'România',
+    status: 'scraped',
   }));
 }
 
@@ -137,7 +184,7 @@ async function main() {
   const payload = transformJobs(jobs);
 
   const jobsPath = path.join(TMP_DIR, 'jobs.json');
-  fs.writeFileSync(jobsPath, JSON.stringify(payload, null, 2));
+  fs.writeFileSync(jobsPath, JSON.stringify({ jobs: payload }, null, 2));
   console.log(`\n💾 Saved ${jobs.length} jobs to ${jobsPath}`);
 
   await uploadJobsToSolr(payload);
